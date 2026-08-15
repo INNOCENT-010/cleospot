@@ -7,11 +7,13 @@ export default function PushPrompt() {
   const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
+    // Don't show on admin pages
+    if (window.location.pathname.startsWith("/admin")) return;
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-    if (!supported) return; // iOS Safari without PWA install — silently skip
+    if (!supported) return;
     if (Notification.permission === "granted") { setSubscribed(true); return; }
     if (Notification.permission === "denied") return;
-    const t = setTimeout(() => setShow(true), 8000); // reduced to 8s
+    const t = setTimeout(() => setShow(true), 8000);
     return () => clearTimeout(t);
   }, []);
 

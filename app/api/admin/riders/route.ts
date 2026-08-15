@@ -11,6 +11,19 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
+export async function PATCH(req: Request) {
+  const { order_id, rider_id } = await req.json();
+  if (!order_id || !rider_id) {
+    return NextResponse.json({ error: "Missing order_id or rider_id" }, { status: 400 });
+  }
+  const { error } = await supabaseAdmin
+    .from("orders")
+    .update({ rider_id })
+    .eq("id", order_id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: Request) {
   const body = await req.json();
   const { data, error } = await supabaseAdmin
