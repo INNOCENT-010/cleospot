@@ -1,11 +1,10 @@
-// GET /api/rider/orders — returns orders assigned to the currently logged-in rider
-// (identified by the cleos_rider_id cookie set at /rider/login).
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 
 export async function GET() {
-  const riderId = cookies().get("cleos_rider_id")?.value;
+  const cookieStore = await cookies();
+  const riderId = cookieStore.get("cleos_rider_id")?.value;
   if (!riderId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
   const { data, error } = await supabaseAdmin

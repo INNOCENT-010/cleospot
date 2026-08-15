@@ -17,5 +17,5 @@ export default async function RiderHomePage() {
     .in("status", ["paid", "preparing", "picked_up", "on_the_way"])
     .order("created_at", { ascending: true });
 
-  return <RiderDashboard riderName={rider.full_name} orders={orders || []} />;
+  return <RiderDashboard riderName={rider.full_name} riderId={riderId} orders={orders || []} />;
 }
