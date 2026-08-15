@@ -1,8 +1,24 @@
-// GET /api/paystack/verify?reference=... — confirms payment with Paystack and
-// marks the matching order as paid. Call this from the order tracking page on load.
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { paystackVerifyTransaction } from "@/lib/paystack";
+import webpush from "@/lib/webpush";
+
+async function sendPushToSubscribers(title: string, body: string, url: string) {
+  const { data: subs } = await supabaseAdmin.from("push_subscriptions").select("*");
+  if (!subs?.length) return;
+  await Promise.allSettled(
+    subs.map((sub) =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify({ title, body, url })
+      ).catch(async (err) => {
+        if (err.statusCode === 410) {
+          await supabaseAdmin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+        }
+      })
+    )
+  );
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -14,11 +30,35 @@ export async function GET(req: Request) {
     const paid = result?.data?.status === "success";
 
     if (paid) {
-      await supabaseAdmin
+      // Fetch order first to check notif_confirmed guard
+      const { data: order } = await supabaseAdmin
         .from("orders")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .select("id, status, notif_confirmed, customer_name")
         .eq("paystack_reference", reference)
-        .eq("status", "pending"); // don't downgrade an order that's already progressed
+        .single();
+
+      if (order && order.status === "pending") {
+        // Update status
+        await supabaseAdmin
+          .from("orders")
+          .update({ status: "paid", paid_at: new Date().toISOString() })
+          .eq("paystack_reference", reference)
+          .eq("status", "pending");
+
+        // Send push only if not already sent for this event
+        if (!order.notif_confirmed) {
+          await supabaseAdmin
+            .from("orders")
+            .update({ notif_confirmed: true })
+            .eq("id", order.id);
+
+          await sendPushToSubscribers(
+            "Order confirmed! 🎉",
+            `Thanks ${order.customer_name?.split(" ")[0] || ""}! Your order is confirmed and being prepared.`,
+            `/order/${order.id}`
+          );
+        }
+      }
     }
 
     return NextResponse.json({ paid });

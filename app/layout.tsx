@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import PushPrompt from "@/components/PushPrompt";
 import { CartProvider } from "@/components/CartProvider";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <main className="min-h-screen">{children}</main>
           <Footer settings={settings} />
           <WhatsAppButton number={settings?.whatsapp_number} />
+          <PushPrompt />
         </CartProvider>
       </body>
     </html>
