@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 
-export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+async function getUserFromRequest(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  if (!token) return null;
+  const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+  return user ?? null;
+}
+
+export async function GET(req: Request) {
+  const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("saved_addresses")
     .select("*")
     .eq("customer_id", user.id)
@@ -19,22 +30,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
-  const body = await req.json();
-  const { label, address, delivery_zone_id, is_default } = body;
+  const { label, address, delivery_zone_id, is_default } = await req.json();
 
   if (is_default) {
-    // clear any existing default first
-    await supabase
+    await supabaseAdmin
       .from("saved_addresses")
       .update({ is_default: false })
       .eq("customer_id", user.id);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("saved_addresses")
     .insert({ customer_id: user.id, label, address, delivery_zone_id: delivery_zone_id || null, is_default: !!is_default })
     .select()

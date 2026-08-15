@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -16,6 +16,10 @@ export default function AccountPage() {
   const [tab, setTab] = useState<"orders" | "addresses">("orders");
   const [newAddr, setNewAddr] = useState({ label: "", address: "", delivery_zone_id: "", is_default: false });
   const [addingAddr, setAddingAddr] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -23,9 +27,11 @@ export default function AccountPage() {
       if (!data.user) { router.push("/account/signup"); return; }
       setEmail(data.user.email || "");
 
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const token = session?.access_token ?? "";
       const [ordersRes, addrRes, zonesRes] = await Promise.all([
-        supabaseBrowser.from("orders").select("*, order_items(*)").eq("customer_id", data.user.id).order("created_at", { ascending: false }),
-        fetch("/api/account/addresses").then((r) => r.json()),
+        supabaseBrowser.from("orders").select("id, total, status, created_at, order_items!order_items_order_id_fkey(meal_name, quantity)").eq("customer_id", data.user.id).order("created_at", { ascending: false }),
+        fetch("/api/account/addresses", { headers: { authorization: `Bearer ${token}` } }).then((r) => r.json()),
         supabaseBrowser.from("delivery_zones").select("*").eq("is_active", true).order("city")
       ]);
 
@@ -42,9 +48,11 @@ export default function AccountPage() {
 
   async function saveAddress(e: React.FormEvent) {
     e.preventDefault();
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    const token = session?.access_token ?? "";
     const res = await fetch("/api/account/addresses", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify(newAddr)
     });
     const data = await res.json();
@@ -60,17 +68,107 @@ export default function AccountPage() {
   }
 
   async function setDefault(id: string) {
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    const token = session?.access_token ?? "";
     await fetch(`/api/account/addresses/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ is_default: true })
     });
     setAddresses((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })));
   }
 
   async function deleteAddr(id: string) {
-    await fetch(`/api/account/addresses/${id}`, { method: "DELETE" });
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    const token = session?.access_token ?? "";
+    await fetch(`/api/account/addresses/${id}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
     setAddresses((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  const [mapsReady, setMapsReady] = useState(false);
+
+  // Load Google Maps script once with a callback so we know when it's ready
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ((window as any).google?.maps?.places) { setMapsReady(true); return; }
+    if (document.getElementById("gmap-script")) return;
+
+    (window as any).__onGMapsLoaded = () => setMapsReady(true);
+
+    const script = document.createElement("script");
+    script.id = "gmap-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&callback=__onGMapsLoaded`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }, []);
+
+  // Init autocomplete once maps is ready AND form is open
+  useEffect(() => {
+    if (!addingAddr || !mapsReady || !addressInputRef.current) return;
+    if (autocompleteRef.current) {
+      (window as any).google.maps.event.clearInstanceListeners(autocompleteRef.current);
+    }
+    (async () => {
+    const { PlaceAutocompleteElement } = await (window as any).google.maps.importLibrary("places") as any;
+    const placeAuto = new PlaceAutocompleteElement({
+      componentRestrictions: { country: "ng" },
+    });
+    placeAuto.style.width = "100%";
+    // Insert after the location button, before the select
+    const container = addressInputRef.current?.parentElement;
+    if (container && !container.querySelector("gmp-placeautocomplete")) {
+      container.appendChild(placeAuto);
+    }
+    placeAuto.addEventListener("gmp-placeselect", async (e: any) => {
+      const place = e.placePrediction.toPlace();
+      await place.fetchFields({ fields: ["formattedAddress"] });
+      const addr = place.formattedAddress || "";
+      setNewAddr((prev) => ({ ...prev, address: addr }));
+      if (addressInputRef.current) addressInputRef.current.value = addr;
+    });
+    autocompleteRef.current = placeAuto;
+    })();
+  }, [addingAddr, mapsReady]);
+
+  async function useMyLocation() {
+    setLocating(true);
+    setLocError(null);
+
+    if (!navigator.geolocation) {
+      setLocError("Geolocation is not supported by your browser.");
+      setLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `/api/geocode?lat=${coords.latitude}&lng=${coords.longitude}`
+          );
+          const data = await res.json();
+          if (!res.ok || !data.address) {
+            setLocError("Could not resolve your location. Try typing your address.");
+          } else {
+            setNewAddr((prev) => ({ ...prev, address: data.address }));
+            if (addressInputRef.current) addressInputRef.current.value = data.address;
+          }
+        } catch {
+          setLocError("Could not fetch your address. Try typing it instead.");
+        }
+        setLocating(false);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocError("Location access denied. Please allow location in your browser settings.");
+        } else {
+          setLocError("Could not get your location. Try typing your address.");
+        }
+        setLocating(false);
+      },
+      { timeout: 10000, maximumAge: 60000 }
+    );
   }
 
   if (orders === null) return <p className="text-center py-16 text-gray-500">Loading…</p>;
@@ -179,12 +277,34 @@ export default function AccountPage() {
                 value={newAddr.label}
                 onChange={(e) => setNewAddr({ ...newAddr, label: e.target.value })}
               />
-              <textarea
-                required placeholder="Street address / landmark"
+              <button
+                type="button"
+                onClick={useMyLocation}
+                disabled={locating}
+                className="w-full flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-500 hover:border-brand-red hover:text-brand-red disabled:opacity-40 transition-colors"
+              >
+                {locating ? (
+                  <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                  </svg>
+                )}
+                {locating ? "Detecting your location…" : "Use my current location"}
+              </button>
+              <input
+                ref={addressInputRef}
+                required
+                placeholder="Or type your street address…"
                 className="w-full border rounded-lg px-3 py-2 text-sm"
-                value={newAddr.address}
+                defaultValue={newAddr.address}
                 onChange={(e) => setNewAddr({ ...newAddr, address: e.target.value })}
               />
+              {locError && <p className="text-xs text-red-500 -mt-2">{locError}</p>}
               <select
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 value={newAddr.delivery_zone_id}
