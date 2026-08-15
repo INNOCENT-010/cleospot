@@ -17,6 +17,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { customer_name, customer_phone, customer_email, customer_address, delivery_city, items, discount_code } = body;
     const deliveryFee = Number(body.delivery_fee) || 0;
+    const deliveryLat = body.delivery_lat || null;
+    const deliveryLng = body.delivery_lng || null;
 
     if (!customer_name || !customer_phone || !customer_email || !customer_address || !items?.length) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -74,6 +76,8 @@ export async function POST(req: Request) {
         customer_email,
         customer_address,
         delivery_city,
+        delivery_lat: deliveryLat,
+        delivery_lng: deliveryLng,
         customer_id: customerId,
         subtotal,
         discount_total: discountTotal,

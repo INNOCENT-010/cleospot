@@ -21,6 +21,7 @@ export default function CheckoutPage() {
   const [mapsReady, setMapsReady] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<any>(null);
 
@@ -47,13 +48,19 @@ export default function CheckoutPage() {
     if (autocompleteRef.current) return;
     const ac = new (window as any).google.maps.places.Autocomplete(
       addressInputRef.current,
-      { componentRestrictions: { country: "ng" }, fields: ["formatted_address"] }
+      { componentRestrictions: { country: "ng" }, fields: ["formatted_address", "geometry"] }
     );
     ac.addListener("place_changed", () => {
       const place = ac.getPlace();
       if (place?.formatted_address) {
         setForm((prev) => ({ ...prev, address: place.formatted_address }));
         if (addressInputRef.current) addressInputRef.current.value = place.formatted_address;
+      }
+      if (place?.geometry?.location) {
+        setCoords({
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng()
+        });
       }
     });
     autocompleteRef.current = ac;
@@ -68,14 +75,15 @@ export default function CheckoutPage() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
+      async ({ coords: position }) => {
         try {
-          const res = await fetch(`/api/geocode?lat=${coords.latitude}&lng=${coords.longitude}`);
+          const res = await fetch(`/api/geocode?lat=${position.latitude}&lng=${position.longitude}`);
           const data = await res.json();
           if (!res.ok || !data.address) {
             setLocError("Could not resolve your location. Type your address instead.");
           } else {
             setForm((prev) => ({ ...prev, address: data.address }));
+            setCoords({ lat: position.latitude, lng: position.longitude });
             if (addressInputRef.current) addressInputRef.current.value = data.address;
           }
         } catch {
@@ -120,10 +128,11 @@ export default function CheckoutPage() {
     });
   }, []);
 
-  function handleSavedAddressChange(id: string) {
+  async function handleSavedAddressChange(id: string) {
     setSelectedSavedId(id);
     if (id === "new") {
       setForm((prev) => ({ ...prev, address: "" }));
+      setCoords(null);
       setZoneId("");
       return;
     }
@@ -131,6 +140,12 @@ export default function CheckoutPage() {
     if (addr) {
       setForm((prev) => ({ ...prev, address: addr.address }));
       if (addr.delivery_zone_id) setZoneId(addr.delivery_zone_id);
+      // Geocode the saved address to get coordinates
+      try {
+        const res = await fetch(`/api/geocode/forward?address=${encodeURIComponent(addr.address)}`);
+        const data = await res.json();
+        if (data.lat && data.lng) setCoords({ lat: data.lat, lng: data.lng });
+      } catch {}
     }
   }
 
@@ -157,6 +172,8 @@ export default function CheckoutPage() {
           customer_address: form.address,
           delivery_city: selectedZone?.city,
           delivery_fee: deliveryFee,
+          delivery_lat: coords?.lat || null,
+          delivery_lng: coords?.lng || null,
           items,
           discount_code: code || undefined
         })
