@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 const STATUS_FLOW: Record<string, string> = {
   paid: "preparing",
@@ -22,13 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
   preparing: "bg-orange-100 text-orange-700",
   picked_up: "bg-purple-100 text-purple-700",
   on_the_way: "bg-indigo-100 text-indigo-700",
-};
-
-const STATUS_PRIORITY: Record<string, number> = {
-  on_the_way: 0,
-  picked_up: 1,
-  preparing: 2,
-  paid: 3,
+  delivered: "bg-green-100 text-green-700",
 };
 
 export default function RiderDashboard({
@@ -41,31 +34,36 @@ export default function RiderDashboard({
   orders: any[];
 }) {
   const [orders, setOrders] = useState(initialOrders);
+  const [completed, setCompleted] = useState<any[]>([]);
+  const [tab, setTab] = useState<"active" | "done">("active");
   const [pinPrompt, setPinPrompt] = useState<string | null>(null);
   const [pinValue, setPinValue] = useState("");
   const [advancing, setAdvancing] = useState<string | null>(null);
-  const router = useRouter();
 
-  // Poll for new assignments every 15 seconds
+  async function fetchOrders() {
+    const res = await fetch("/api/rider/orders", { credentials: "include" });
+    if (res.ok) setOrders(await res.json());
+  }
+
+  async function fetchCompleted() {
+    const res = await fetch("/api/rider/orders?completed=true", { credentials: "include" });
+    if (res.ok) setCompleted(await res.json());
+  }
+
   useEffect(() => {
-    async function refresh() {
-      const res = await fetch("/api/rider/orders", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
-      }
-    }
-    const interval = setInterval(refresh, 15000);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (tab === "done") fetchCompleted();
+  }, [tab]);
 
   async function advance(order: any) {
     const nextStatus = STATUS_FLOW[order.status];
     if (!nextStatus) return;
-    if (nextStatus === "delivered") {
-      setPinPrompt(order.id);
-      return;
-    }
+    if (nextStatus === "delivered") { setPinPrompt(order.id); return; }
     setAdvancing(order.id);
     const res = await fetch(`/api/orders/${order.id}/status`, {
       method: "PATCH",
@@ -98,137 +96,105 @@ export default function RiderDashboard({
   }
 
   function openInMaps(address: string, lat?: number | null, lng?: number | null) {
-    const query = lat && lng
-      ? `${lat},${lng}`
-      : encodeURIComponent(address);
+    const query = lat && lng ? `${lat},${lng}` : encodeURIComponent(address);
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, "_blank");
   }
 
-  // Sort by priority
-  const sorted = [...orders].sort((a, b) =>
-    (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99)
-  );
-
-  const onTheWay = sorted.filter((o) => o.status === "on_the_way");
-  const pickedUp = sorted.filter((o) => o.status === "picked_up");
-  const preparing = sorted.filter((o) => o.status === "preparing");
-  const waiting = sorted.filter((o) => o.status === "paid");
-
-  function OrderCard({ o }: { o: any }) {
+  function CompactCard({ o, showActions }: { o: any; showActions: boolean }) {
     return (
-      <div className="border rounded-xl p-4 bg-white shadow-sm">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-2">
+      <div className="border rounded-xl p-3 bg-white">
+        <div className="flex justify-between items-start mb-1">
           <div>
-            <p className="font-semibold">{o.customer_name}</p>
-            <p className="text-sm text-gray-500">{o.customer_phone}</p>
+            <span className="font-semibold text-sm">{o.customer_name}</span>
+            <span className="text-gray-400 text-xs ml-2">{o.customer_phone}</span>
           </div>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[o.status] || "bg-gray-100 text-gray-600"}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2 ${STATUS_COLORS[o.status] || "bg-gray-100 text-gray-500"}`}>
             {o.status.replace(/_/g, " ")}
           </span>
         </div>
 
-        {/* Address */}
-        <div className="bg-gray-50 rounded-lg px-3 py-2 mb-3">
-          <p className="text-sm text-gray-700">{o.customer_address}</p>
-          {o.delivery_city && <p className="text-xs text-gray-400 mt-0.5">📍 {o.delivery_city}</p>}
-        </div>
+        <p className="text-xs text-gray-500 mb-0.5 truncate">{o.customer_address}</p>
+        {o.delivery_city && <p className="text-xs text-gray-400 mb-1">📍 {o.delivery_city}</p>}
 
-        {/* Items */}
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-xs text-gray-600 mb-2 line-clamp-1">
           {o.order_items?.map((i: any) => `${i.quantity}× ${i.meal_name}`).join(", ")}
         </p>
 
-        {/* Total */}
-        <p className="text-sm font-semibold mb-3">₦{Number(o.total).toLocaleString()}</p>
-
-        {/* PIN reminder for on_the_way */}
-        {o.status === "on_the_way" && (
-          <div className="bg-[#fef2f2] border border-red-100 rounded-lg px-3 py-2 mb-3">
-            <p className="text-xs text-gray-500">Ask customer for PIN to confirm delivery</p>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => advance(o)}
-            disabled={advancing === o.id}
-            className="flex-1 bg-brand-red text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors"
-          >
-            {advancing === o.id ? "Updating…" : STATUS_LABEL[o.status]}
-          </button>
-
-          <button
-            onClick={() => openInMaps(o.customer_address, o.delivery_lat, o.delivery_lng)}
-            className="flex items-center gap-1.5 border text-sm font-medium px-3 py-2.5 rounded-lg hover:border-brand-red hover:text-brand-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-            </svg>
-            Navigate
-          </button>
-
-          <button
-            onClick={() => router.push(`/rider/${o.id}`)}
-            className="border text-sm font-medium px-3 py-2.5 rounded-lg hover:border-brand-red hover:text-brand-red transition-colors"
-          >
-            Share location
-          </button>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold">₦{Number(o.total).toLocaleString()}</span>
+          {showActions && (
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => openInMaps(o.customer_address, o.delivery_lat, o.delivery_lng)}
+                className="text-xs border px-2.5 py-1.5 rounded-lg hover:border-brand-red hover:text-brand-red transition-colors flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+                Navigate
+              </button>
+              <button
+                onClick={() => advance(o)}
+                disabled={advancing === o.id}
+                className="text-xs bg-brand-red text-white px-2.5 py-1.5 rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors"
+              >
+                {advancing === o.id ? "…" : STATUS_LABEL[o.status]}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  function Section({ title, items, color }: { title: string; items: any[]; color: string }) {
-    if (items.length === 0) return null;
-    return (
-      <div className="mb-6">
-        <div className={`inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full mb-3 ${color}`}>
-          {title} ({items.length})
-        </div>
-        <div className="space-y-3">
-          {items.map((o) => <OrderCard key={o.id} o={o} />)}
-        </div>
-      </div>
-    );
-  }
+  const activeOrders = orders.sort((a, b) => {
+    const p: Record<string, number> = { on_the_way: 0, picked_up: 1, preparing: 2, paid: 3 };
+    return (p[a.status] ?? 9) - (p[b.status] ?? 9);
+  });
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Hi, {riderName} 👋</h1>
-          <p className="text-gray-500 text-sm">
-            {orders.length === 0
-              ? "No active deliveries"
-              : `${orders.length} active ${orders.length === 1 ? "delivery" : "deliveries"}`}
-          </p>
+          <h1 className="text-xl font-bold">Hi, {riderName} 👋</h1>
+          <p className="text-gray-500 text-xs">{activeOrders.length} active</p>
         </div>
-        <button
-          onClick={async () => {
-            const res = await fetch("/api/rider/orders", { credentials: "include" });
-            if (res.ok) setOrders(await res.json());
-          }}
-          className="text-sm border rounded-lg px-3 py-1.5 text-gray-500 hover:text-brand-red hover:border-brand-red transition-colors"
-        >
+        <button onClick={fetchOrders}
+          className="text-xs border rounded-lg px-3 py-1.5 text-gray-500 hover:text-brand-red hover:border-brand-red transition-colors">
           ↻ Refresh
         </button>
       </div>
 
-      {orders.length === 0 && (
-        <div className="text-center py-16">
-          <p className="text-4xl mb-3">🛵</p>
-          <p className="text-gray-500">No deliveries assigned yet.</p>
-          <p className="text-gray-400 text-sm mt-1">Pull down to refresh or wait — new orders will appear automatically.</p>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b mb-4">
+        <button onClick={() => setTab("active")}
+          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === "active" ? "border-brand-red text-brand-red" : "border-transparent text-gray-500"}`}>
+          Active ({activeOrders.length})
+        </button>
+        <button onClick={() => setTab("done")}
+          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === "done" ? "border-brand-red text-brand-red" : "border-transparent text-gray-500"}`}>
+          Completed
+        </button>
+      </div>
+
+      {/* Active */}
+      {tab === "active" && (
+        activeOrders.length === 0
+          ? <p className="text-center text-gray-400 text-sm py-12">No active deliveries. Pull to refresh.</p>
+          : <div className="space-y-2">
+              {activeOrders.map((o) => <CompactCard key={o.id} o={o} showActions={true} />)}
+            </div>
       )}
 
-      <Section title="🛵 On the way" items={onTheWay} color="bg-indigo-100 text-indigo-700" />
-      <Section title="📦 Picked up" items={pickedUp} color="bg-purple-100 text-purple-700" />
-      <Section title="👩‍🍳 Preparing" items={preparing} color="bg-orange-100 text-orange-700" />
-      <Section title="⏳ Waiting" items={waiting} color="bg-blue-100 text-blue-700" />
+      {/* Completed */}
+      {tab === "done" && (
+        completed.length === 0
+          ? <p className="text-center text-gray-400 text-sm py-12">No completed deliveries yet.</p>
+          : <div className="space-y-2">
+              {completed.map((o) => <CompactCard key={o.id} o={o} showActions={false} />)}
+            </div>
+      )}
 
       {/* PIN Modal */}
       {pinPrompt && (
@@ -247,7 +213,7 @@ export default function RiderDashboard({
             <div className="flex gap-2">
               <button onClick={confirmDelivery}
                 className="flex-1 bg-brand-red text-white py-3 rounded-lg font-medium">
-                Confirm delivery
+                Confirm
               </button>
               <button onClick={() => { setPinPrompt(null); setPinValue(""); }}
                 className="flex-1 border py-3 rounded-lg">
