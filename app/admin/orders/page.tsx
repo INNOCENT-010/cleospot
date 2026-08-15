@@ -26,21 +26,20 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [assigningRider, setAssigningRider] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     const [o, r] = await Promise.all([
       fetch("/api/admin/orders").then((res) => res.json()),
       fetch("/api/admin/riders").then((res) => res.json())
     ]);
     setOrders(Array.isArray(o) ? o : []);
     setRiders(Array.isArray(r) ? r : []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => {
     load();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(load, 30000);
+    const interval = setInterval(() => load(true), 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -55,12 +54,15 @@ export default function AdminOrdersPage() {
       alert(data.error || "Could not update status");
       return;
     }
-    await load();
+    // Optimistically update status in UI
+    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
   }
 
   async function assignRider(orderId: string, riderId: string) {
     if (!riderId) return;
     setAssigningRider(orderId);
+    // Optimistically update UI immediately
+    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, rider_id: riderId } : o));
     const res = await fetch("/api/admin/riders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -69,8 +71,7 @@ export default function AdminOrdersPage() {
     if (!res.ok) {
       const data = await res.json();
       alert(data.error || "Could not assign rider");
-    } else {
-      await load();
+      await load(true); // Revert on error
     }
     setAssigningRider(null);
   }
@@ -181,7 +182,7 @@ export default function AdminOrdersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Orders</h1>
-        <button onClick={load} className="text-sm text-gray-500 hover:text-brand-red border rounded-lg px-3 py-1.5">
+        <button onClick={() => load()} className="text-sm text-gray-500 hover:text-brand-red border rounded-lg px-3 py-1.5">
           ↻ Refresh
         </button>
       </div>
