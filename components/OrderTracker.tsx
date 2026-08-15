@@ -28,8 +28,11 @@ export default function OrderTracker({ order: initialOrder, reference }: { order
       });
   }, [reference, order.status]);
 
-  // Live status updates via Supabase Realtime
+  // Live status updates via Supabase Realtime + polling fallback
   useEffect(() => {
+    if (order.status === "delivered" || order.status === "cancelled") return;
+
+    // Realtime
     const channel = supabaseBrowser
       .channel(`order-${order.id}`)
       .on(
@@ -38,10 +41,22 @@ export default function OrderTracker({ order: initialOrder, reference }: { order
         (payload) => setOrder((o) => ({ ...o, ...(payload.new as Order) }))
       )
       .subscribe();
+
+    // Polling fallback every 10 seconds
+    const poll = setInterval(async () => {
+      const { data } = await supabaseBrowser
+        .from("orders")
+        .select("*")
+        .eq("id", order.id)
+        .single();
+      if (data) setOrder(data as Order);
+    }, 10000);
+
     return () => {
       supabaseBrowser.removeChannel(channel);
+      clearInterval(poll);
     };
-  }, [order.id]);
+  }, [order.id, order.status]);
 
   const currentIndex = STATUS_STEPS.findIndex((s) => s.key === order.status);
   const showMap = ["picked_up", "on_the_way"].includes(order.status) && order.delivery_lat && order.delivery_lng;
