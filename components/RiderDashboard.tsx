@@ -120,8 +120,7 @@ export default function RiderDashboard({
           {o.order_items?.map((i: any) => `${i.quantity}× ${i.meal_name}`).join(", ")}
         </p>
 
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold">₦{Number(o.total).toLocaleString()}</span>
+        <div className="flex items-center justify-end">
           {showActions && (
             <div className="flex gap-1.5">
               <button

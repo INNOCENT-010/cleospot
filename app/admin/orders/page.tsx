@@ -44,36 +44,36 @@ export default function AdminOrdersPage() {
   }, []);
 
   async function updateStatus(orderId: string, status: string, pin?: string, riderId?: string) {
-    const res = await fetch(`/api/orders/${orderId}/status`, {
+    const statusRes = await fetch(`/api/orders/${orderId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ status, pin, rider_id: riderId })
     });
-    if (!res.ok) {
-      const data = await res.json();
+    if (!statusRes.ok) {
+      const data = await statusRes.json();
       alert(data.error || "Could not update status");
       return;
     }
-    // Optimistically update status in UI
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
   }
 
   async function assignRider(orderId: string, riderId: string) {
     if (!riderId) return;
     setAssigningRider(orderId);
-    // Optimistically update UI immediately
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, rider_id: riderId } : o));
-    const res = await fetch("/api/admin/riders", {
+    const assignRes = await fetch("/api/admin/riders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ order_id: orderId, rider_id: riderId })
     });
-    if (!res.ok) {
-      const data = await res.json();
+    if (!assignRes.ok) {
+      const data = await assignRes.json();
       alert(data.error || "Could not assign rider");
-      await load(true); // Revert on error
+      await load(true);
+    } else {
+      await load(true);
     }
     setAssigningRider(null);
   }

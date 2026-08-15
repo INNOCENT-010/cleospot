@@ -7,13 +7,15 @@ export default function PushPrompt() {
   const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
-    // Don't show on admin pages
     if (window.location.pathname.startsWith("/admin")) return;
+    if (window.location.pathname.startsWith("/rider")) return;
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
     if (!supported) return;
     if (Notification.permission === "granted") { setSubscribed(true); return; }
     if (Notification.permission === "denied") return;
-    const t = setTimeout(() => setShow(true), 8000);
+    // Only show once per session
+    if (sessionStorage.getItem("push-prompt-dismissed")) return;
+    const t = setTimeout(() => setShow(true), 15000);
     return () => clearTimeout(t);
   }, []);
 
@@ -51,14 +53,14 @@ export default function PushPrompt() {
           <p className="font-semibold text-sm">Get notified when today's plates are ready</p>
           <p className="text-xs text-gray-500 mt-0.5">We'll ping you when fresh meals drop or there's a promo.</p>
         </div>
-        <button onClick={() => setShow(false)} className="text-gray-300 hover:text-gray-500 text-lg leading-none">×</button>
+        <button onClick={() => { setShow(false); sessionStorage.setItem("push-prompt-dismissed", "1"); }} className="text-gray-300 hover:text-gray-500 text-lg leading-none">×</button>
       </div>
       <div className="flex gap-2 mt-3">
         <button onClick={subscribe}
           className="flex-1 bg-brand-red text-white text-sm font-medium py-2 rounded-xl hover:bg-brand-dark transition-colors">
           Yes, notify me
         </button>
-        <button onClick={() => setShow(false)}
+        <button onClick={() => { setShow(false); sessionStorage.setItem("push-prompt-dismissed", "1"); }}
           className="flex-1 border text-sm py-2 rounded-xl text-gray-500 hover:border-gray-400 transition-colors">
           Not now
         </button>
