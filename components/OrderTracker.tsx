@@ -5,7 +5,7 @@ import RiderMap from "@/components/RiderMap";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Order } from "@/lib/types";
 
-const STATUS_STEPS: { key: Order["status"]; label: string }[] = [
+const STATUS_STEPS: { key: string; label: string }[] = [
   { key: "paid", label: "Order confirmed" },
   { key: "preparing", label: "Preparing" },
   { key: "picked_up", label: "Picked up" },
@@ -15,18 +15,35 @@ const STATUS_STEPS: { key: Order["status"]; label: string }[] = [
 
 export default function OrderTracker({ order: initialOrder, reference }: { order: Order; reference?: string }) {
   const [order, setOrder] = useState(initialOrder);
-  const [verifying, setVerifying] = useState(order.status === "pending" && !!reference);
+  const [verifying, setVerifying] = useState(false);
 
-  // Confirm payment on first load if we just came back from Paystack
+  // On mount: if status is pending, always try to verify — covers refresh case too
   useEffect(() => {
-    if (!reference || order.status !== "pending") return;
-    fetch(`/api/paystack/verify?reference=${reference}`)
+    if (order.status !== "pending") return;
+    setVerifying(true);
+    fetch(`/api/paystack/verify?reference=${reference || order.paystack_reference}`)
       .then((r) => r.json())
-      .then(() => {
-        setOrder((o) => ({ ...o, status: "paid" }));
+      .then((data) => {
+        if (data.paid) {
+          setOrder((o) => ({ ...o, status: "paid" }));
+        }
         setVerifying(false);
-      });
-  }, [reference, order.status]);
+      })
+      .catch(() => setVerifying(false));
+  }, []);
+
+  // Also re-fetch fresh order state on mount to catch any updates while user was away
+  useEffect(() => {
+    async function syncOrder() {
+      const { data } = await supabaseBrowser
+        .from("orders")
+        .select("*")
+        .eq("id", initialOrder.id)
+        .single();
+      if (data) setOrder(data as Order);
+    }
+    syncOrder();
+  }, [initialOrder.id]);
 
   // Live status updates via Supabase Realtime + polling fallback
   useEffect(() => {

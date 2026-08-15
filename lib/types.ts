@@ -43,6 +43,7 @@ export type Order = {
   delivery_pin: string;
   rider_id: string | null;
   created_at: string;
+  paystack_reference: string;
 };
 
 export type RiderLocation = {
