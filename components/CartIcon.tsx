@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCart } from "@/components/CartProvider";
 
-export default function CartIcon() {
+export default function CartIcon({ scrolled }: { scrolled?: boolean }) {
   const { items } = useCart();
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -18,7 +18,7 @@ export default function CartIcon() {
         strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="text-gray-900"
+        className={`transition-colors ${scrolled === false ? "text-white" : "text-gray-900"}`}
       >
         <circle cx="9" cy="21" r="1.4" fill="currentColor" stroke="none" />
         <circle cx="19" cy="21" r="1.4" fill="currentColor" stroke="none" />
