@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { paystackVerifyTransaction } from "@/lib/paystack";
 import webpush from "@/lib/webpush";
-import { resend, FROM } from "@/lib/resend";
+import { getResend, FROM } from "@/lib/resend";
 import { orderConfirmationHtml } from "@/lib/emails/orderConfirmation";
 
 async function sendPushToSubscribers(title: string, body: string, url: string) {
@@ -67,7 +67,7 @@ export async function GET(req: Request) {
               .select("meal_name, quantity, unit_price")
               .eq("order_id", order.id);
 
-            await resend.emails.send({
+            await getResend().emails.send({
               from: FROM,
               to: order.customer_email,
               subject: `Order confirmed — ₦${Number(order.total).toLocaleString()} · CLeo's Pot`,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { resend, FROM } from "@/lib/resend";
+import { getResend, FROM } from "@/lib/resend";
 import { menuUpdateHtml } from "@/lib/emails/menuUpdate";
 
 export async function POST(req: Request) {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       const batch = emails.slice(i, i + 50);
       await Promise.allSettled(
         batch.map((email) =>
-          resend.emails.send({
+          getResend().emails.send({
             from: FROM,
             to: email as string,
             subject: "Today's menu is live 🍲 — CLeo's Pot",
