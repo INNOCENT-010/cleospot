@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import OrderTracker from "@/components/OrderTracker";
 
 async function getOrder(id: string) {
-  const { data } = await supabaseAdmin.from("orders").select("*").eq("id", id).single();
+  const { data } = await supabaseAdmin
+    .from("orders")
+    .select("*, order_items(meal_name, quantity, unit_price)")
+    .eq("id", id)
+    .single();
   return data;
 }
 
