@@ -29,8 +29,8 @@ export default function AdminOrdersPage() {
   async function load(silent = false) {
     if (!silent) setLoading(true);
     const [o, r] = await Promise.all([
-      fetch("/api/admin/orders").then((res) => res.json()),
-      fetch("/api/admin/riders").then((res) => res.json())
+      fetch("/api/admin/orders", { credentials: "include" }).then((res) => res.json()),
+      fetch("/api/admin/riders", { credentials: "include" }).then((res) => res.json())
     ]);
     setOrders(Array.isArray(o) ? o : []);
     setRiders(Array.isArray(r) ? r : []);
@@ -47,6 +47,7 @@ export default function AdminOrdersPage() {
     const res = await fetch(`/api/orders/${orderId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ status, pin, rider_id: riderId })
     });
     if (!res.ok) {
@@ -66,6 +67,7 @@ export default function AdminOrdersPage() {
     const res = await fetch("/api/admin/riders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ order_id: orderId, rider_id: riderId })
     });
     if (!res.ok) {
