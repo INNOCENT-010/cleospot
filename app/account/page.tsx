@@ -30,7 +30,7 @@ export default function AccountPage() {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
       const token = session?.access_token ?? "";
       const [ordersRes, addrRes, zonesRes] = await Promise.all([
-        supabaseBrowser.from("orders").select("id, total, status, created_at, order_items!order_items_order_id_fkey(meal_name, quantity)").eq("customer_id", data.user.id).order("created_at", { ascending: false }),
+        supabaseBrowser.from("orders").select("id, total, status, created_at, order_items(meal_name, quantity)").eq("customer_id", data.user.id).order("created_at", { ascending: false }),
         fetch("/api/account/addresses", { headers: { authorization: `Bearer ${token}` } }).then((r) => r.json()),
         supabaseBrowser.from("delivery_zones").select("*").eq("is_active", true).order("city")
       ]);

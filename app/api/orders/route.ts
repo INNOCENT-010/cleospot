@@ -22,6 +22,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Resolve customer_id if this email matches a registered user
+    let customerId: string | null = null;
+    const { data: authUser } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("email", customer_email)
+      .maybeSingle();
+    if (authUser?.id) customerId = authUser.id;
+
+    // Fallback: check auth.users directly
+    if (!customerId) {
+      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+      const match = users.find((u) => u.email === customer_email);
+      if (match) customerId = match.id;
+    }
+
     const subtotal = items.reduce((sum: number, i: any) => sum + i.price * i.quantity, 0);
 
     let discountTotal = 0;
@@ -55,8 +71,10 @@ export async function POST(req: Request) {
       .insert({
         customer_name,
         customer_phone,
+        customer_email,
         customer_address,
         delivery_city,
+        customer_id: customerId,
         subtotal,
         discount_total: discountTotal,
         discount_code_id: discountCodeId,
@@ -86,7 +104,7 @@ export async function POST(req: Request) {
       try {
         await supabaseAdmin.rpc("increment_discount_usage", { code_id: discountCodeId });
       } catch {
-        // Fallback if the RPC isn't set up — non-fatal, just skip usage tracking.
+        // Non-fatal
       }
     }
 
@@ -99,7 +117,6 @@ export async function POST(req: Request) {
     });
 
     if (!paystackRes.status) {
-      console.error("Paystack initialize failed:", paystackRes);
       return NextResponse.json({ error: paystackRes.message || "Payment initialization failed" }, { status: 500 });
     }
 
