@@ -1,24 +1,21 @@
-// components/LogoImage.tsx  ← new file
 "use client";
 
-import { useState } from "react";
-
-export default function LogoImage({ src, alt }: { src: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
+export default function LogoImage({ src, alt, size = "header" }: { src: string; alt: string; size?: "header" | "footer" }) {
+  if (size === "footer") {
     return (
-      <span className="text-2xl brand-script text-brand-red font-bold">{alt}</span>
+      <img
+        src={src}
+        alt={alt}
+        className="h-20 w-auto object-contain"
+        style={{ filter: "brightness(0) invert(1)" }}
+      />
     );
   }
-
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={alt}
-      className="h-10 w-auto object-contain"
-      onError={() => setFailed(true)}
+      className="h-14 w-auto object-contain"
     />
   );
 }

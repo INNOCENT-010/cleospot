@@ -25,7 +25,14 @@ export default function Header({ settings }: { settings: StoreSettings | null })
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           {settings?.logo_url ? (
-            <LogoImage src={settings.logo_url} alt={brandName} />
+            <div style={{ filter: scrolled ? "none" : "brightness(0) invert(1)" }}
+              className="transition-all duration-300">
+              <LogoImage
+                src={settings.logo_url}
+                alt={brandName}
+                size="header"
+              />
+            </div>
           ) : (
             <span className={`text-2xl brand-script font-bold transition-colors ${scrolled ? "text-brand-red" : "text-white"}`}>
               {brandName}
