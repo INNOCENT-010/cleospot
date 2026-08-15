@@ -24,6 +24,79 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: "bg-green-100 text-green-700",
 };
 
+function CompactCard({ o, showActions, onAdvance, advancing, onOpenMaps }: {
+  o: any;
+  showActions: boolean;
+  onAdvance: (o: any) => void;
+  advancing: string | null;
+  onOpenMaps: (address: string, lat?: number | null, lng?: number | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border rounded-xl p-3 bg-white">
+      <div className="cursor-pointer" onClick={() => setExpanded((v) => !v)}>
+        <div className="flex justify-between items-start mb-1">
+          <div>
+            <span className="font-semibold text-sm">{o.customer_name}</span>
+            <span className="text-gray-400 text-xs ml-2">{o.customer_phone}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            <span className="text-gray-400 text-xs">{expanded ? "▲" : "▼"}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[o.status] || "bg-gray-100 text-gray-500"}`}>
+              {o.status.replace(/_/g, " ")}
+            </span>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mb-0.5 truncate">{o.customer_address}</p>
+        {o.delivery_city && <p className="text-xs text-gray-400 mb-1">📍 {o.delivery_city}</p>}
+        <p className="text-xs text-gray-600 mb-2 line-clamp-1">
+          {o.order_items?.map((i: any) => `${i.quantity}× ${i.meal_name}`).join(", ")}
+        </p>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 mb-3 space-y-1 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+          <p><span className="font-medium text-gray-700">Items:</span> {o.order_items?.map((i: any) => `${i.quantity}× ${i.meal_name}`).join(", ")}</p>
+          <p><span className="font-medium text-gray-700">Total:</span> ₦{Number(o.total).toLocaleString()}</p>
+          <p><span className="font-medium text-gray-700">PIN:</span> <span className="font-mono font-bold text-brand-red">{o.delivery_pin}</span></p>
+          <p><span className="font-medium text-gray-700">Address:</span> {o.customer_address}</p>
+          {o.delivery_city && <p><span className="font-medium text-gray-700">Area:</span> {o.delivery_city}</p>}
+          {showActions && (
+            <button
+              onClick={(e) => { e.stopPropagation(); window.location.href = `/rider/${o.id}`; }}
+              className="mt-2 w-full border border-dashed border-gray-300 rounded-lg py-1.5 text-xs text-gray-500 hover:border-brand-red hover:text-brand-red transition-colors"
+            >
+              📍 Share my live location for this order
+            </button>
+          )}
+        </div>
+      )}
+
+      {showActions && (
+        <div className="flex gap-1.5 justify-end mt-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenMaps(o.customer_address, o.delivery_lat, o.delivery_lng); }}
+            className="text-xs border px-2.5 py-1.5 rounded-lg hover:border-brand-red hover:text-brand-red transition-colors flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+            Navigate
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdvance(o); }}
+            disabled={advancing === o.id}
+            className="text-xs bg-brand-red text-white px-2.5 py-1.5 rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors"
+          >
+            {advancing === o.id ? "…" : STATUS_LABEL[o.status]}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RiderDashboard({
   riderName,
   riderId,
@@ -100,52 +173,7 @@ export default function RiderDashboard({
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, "_blank");
   }
 
-  function CompactCard({ o, showActions }: { o: any; showActions: boolean }) {
-    return (
-      <div className="border rounded-xl p-3 bg-white">
-        <div className="flex justify-between items-start mb-1">
-          <div>
-            <span className="font-semibold text-sm">{o.customer_name}</span>
-            <span className="text-gray-400 text-xs ml-2">{o.customer_phone}</span>
-          </div>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2 ${STATUS_COLORS[o.status] || "bg-gray-100 text-gray-500"}`}>
-            {o.status.replace(/_/g, " ")}
-          </span>
-        </div>
-
-        <p className="text-xs text-gray-500 mb-0.5 truncate">{o.customer_address}</p>
-        {o.delivery_city && <p className="text-xs text-gray-400 mb-1">📍 {o.delivery_city}</p>}
-
-        <p className="text-xs text-gray-600 mb-2 line-clamp-1">
-          {o.order_items?.map((i: any) => `${i.quantity}× ${i.meal_name}`).join(", ")}
-        </p>
-
-        <div className="flex items-center justify-end">
-          {showActions && (
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => openInMaps(o.customer_address, o.delivery_lat, o.delivery_lng)}
-                className="text-xs border px-2.5 py-1.5 rounded-lg hover:border-brand-red hover:text-brand-red transition-colors flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                </svg>
-                Navigate
-              </button>
-              <button
-                onClick={() => advance(o)}
-                disabled={advancing === o.id}
-                className="text-xs bg-brand-red text-white px-2.5 py-1.5 rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors"
-              >
-                {advancing === o.id ? "…" : STATUS_LABEL[o.status]}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  
 
   const activeOrders = orders.sort((a, b) => {
     const p: Record<string, number> = { on_the_way: 0, picked_up: 1, preparing: 2, paid: 3 };
@@ -182,7 +210,7 @@ export default function RiderDashboard({
         activeOrders.length === 0
           ? <p className="text-center text-gray-400 text-sm py-12">No active deliveries. Pull to refresh.</p>
           : <div className="space-y-2">
-              {activeOrders.map((o) => <CompactCard key={o.id} o={o} showActions={true} />)}
+              {activeOrders.map((o) => <CompactCard key={o.id} o={o} showActions={true} onAdvance={advance} advancing={advancing} onOpenMaps={openInMaps} />)}
             </div>
       )}
 
@@ -191,7 +219,7 @@ export default function RiderDashboard({
         completed.length === 0
           ? <p className="text-center text-gray-400 text-sm py-12">No completed deliveries yet.</p>
           : <div className="space-y-2">
-              {completed.map((o) => <CompactCard key={o.id} o={o} showActions={false} />)}
+              {completed.map((o) => <CompactCard key={o.id} o={o} showActions={false} onAdvance={advance} advancing={advancing} onOpenMaps={openInMaps} />)}
             </div>
       )}
 
