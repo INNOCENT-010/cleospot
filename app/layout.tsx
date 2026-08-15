@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body style={{ ["--brand-red" as string]: primary }}>
         <CartProvider>
           <Header settings={settings} />
-          <main className="min-h-screen">{children}</main>
+          <main className="min-h-screen pt-[73px]">{children}</main>
           <Footer settings={settings} />
           <WhatsAppButton number={settings?.whatsapp_number} />
           <PushPrompt />

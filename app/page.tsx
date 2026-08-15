@@ -48,7 +48,8 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* Hero — video if available, static fallback if not */}
+      {/* Hero — pulls up behind fixed header */}
+      <div className="-mt-[73px]">
       {videos.length > 0 ? (
         <HeroVideo videos={videos} />
       ) : (
@@ -72,6 +73,7 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+      </div>
 
       {/* Meals section */}
       <section

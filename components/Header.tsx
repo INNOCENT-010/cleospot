@@ -19,8 +19,8 @@ export default function Header({ settings }: { settings: StoreSettings | null })
   }, []);
 
   return (
-    <header className={`sticky top-0 z-40 transition-all duration-300 border-b-2 border-brand-red ${
-      scrolled ? "bg-white shadow-sm" : "bg-transparent"
+    <header className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
+      scrolled ? "bg-white shadow-sm border-b-2 border-brand-red" : "bg-transparent border-b-2 border-transparent"
     }`}>
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">

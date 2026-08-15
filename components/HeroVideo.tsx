@@ -18,18 +18,21 @@ export default function HeroVideo({ videos }: { videos: Video[] }) {
   }, [current, videos]);
 
   function handleEnded() {
-    setCurrent((c) => (c + 1) % videos.length);
+    if (videos.length > 1) {
+      setCurrent((c) => (c + 1) % videos.length);
+    }
   }
 
   if (!videos.length) return null;
 
   return (
-    <div className="relative w-full h-[55vh] md:h-[70vh] overflow-hidden bg-black">
+    <div className="relative w-full h-[55vh] md:h-[70vh] overflow-hidden bg-black -mt-[73px]">
       <video
         ref={videoRef}
         autoPlay
         muted
         playsInline
+        loop={videos.length === 1}
         onEnded={handleEnded}
         className="absolute inset-0 w-full h-full object-cover"
       />
