@@ -110,24 +110,19 @@ export default function AccountPage() {
       (window as any).google.maps.event.clearInstanceListeners(autocompleteRef.current);
     }
     (async () => {
-    const { PlaceAutocompleteElement } = await (window as any).google.maps.importLibrary("places") as any;
-    const placeAuto = new PlaceAutocompleteElement({
-      componentRestrictions: { country: "ng" },
-    });
-    placeAuto.style.width = "100%";
-    // Insert after the location button, before the select
-    const container = addressInputRef.current?.parentElement;
-    if (container && !container.querySelector("gmp-placeautocomplete")) {
-      container.appendChild(placeAuto);
-    }
-    placeAuto.addEventListener("gmp-placeselect", async (e: any) => {
-      const place = e.placePrediction.toPlace();
-      await place.fetchFields({ fields: ["formattedAddress"] });
-      const addr = place.formattedAddress || "";
-      setNewAddr((prev) => ({ ...prev, address: addr }));
-      if (addressInputRef.current) addressInputRef.current.value = addr;
-    });
-    autocompleteRef.current = placeAuto;
+      if (!addressInputRef.current) return;
+      const ac = new (window as any).google.maps.places.Autocomplete(
+        addressInputRef.current,
+        { componentRestrictions: { country: "ng" }, fields: ["formatted_address"] }
+      );
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (place?.formatted_address) {
+          setNewAddr((prev) => ({ ...prev, address: place.formatted_address }));
+          if (addressInputRef.current) addressInputRef.current.value = place.formatted_address;
+        }
+      });
+      autocompleteRef.current = ac;
     })();
   }, [addingAddr, mapsReady]);
 
