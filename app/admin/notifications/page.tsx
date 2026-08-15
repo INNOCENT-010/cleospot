@@ -8,7 +8,10 @@ type Log = { id: string; title: string; body: string; sent_count: number; sent_a
 export default function AdminNotificationsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [log, setLog] = useState<Log[]>([]);
-  const [tab, setTab] = useState<"broadcast" | "templates" | "log">("broadcast");
+  const [tab, setTab] = useState<"broadcast" | "email" | "templates" | "log">("broadcast");
+  const [promoText, setPromoText] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ sent: number; total: number } | null>(null);
 
   // Broadcast state
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -107,12 +110,12 @@ export default function AdminNotificationsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b mb-6">
-        {(["broadcast", "templates", "log"] as const).map((t) => (
+        {(["broadcast", "email", "templates", "log"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium capitalize -mb-px border-b-2 transition-colors ${
               tab === t ? "border-brand-red text-brand-red" : "border-transparent text-gray-500"
             }`}>
-            {t === "broadcast" ? "📣 Broadcast" : t === "templates" ? "📝 Templates" : "📊 Log"}
+            {t === "broadcast" ? "📣 Push" : t === "email" ? "✉️ Email" : t === "templates" ? "📝 Templates" : "📊 Log"}
           </button>
         ))}
       </div>
@@ -197,6 +200,53 @@ export default function AdminNotificationsPage() {
               className="w-full bg-brand-red text-white font-bold py-3 rounded-xl hover:bg-brand-dark disabled:opacity-50 transition-colors"
             >
               {broadcasting ? "Sending…" : "📣 Send to all subscribers"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EMAIL ── */}
+      {tab === "email" && (
+        <div className="space-y-5">
+          {/* Menu update template */}
+          <div className="border rounded-xl p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-medium text-sm">📋 Today's menu update</p>
+                <p className="text-xs text-gray-500 mt-0.5">Sends current available meals to every customer who has ever ordered.</p>
+              </div>
+            </div>
+            <input
+              placeholder="Optional promo line — e.g. 20% off all orders today 🔥"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={promoText}
+              onChange={(e) => setPromoText(e.target.value)}
+            />
+            {emailResult && (
+              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                ✅ Sent to {emailResult.sent} of {emailResult.total} customers.
+              </p>
+            )}
+            <button
+              disabled={emailSending}
+              onClick={async () => {
+                setEmailSending(true);
+                setEmailResult(null);
+                const res = await fetch("/api/admin/notifications/email", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-admin-session": getCookie("cleos_admin_session")
+                  },
+                  body: JSON.stringify({ template: "menu_update", promo_text: promoText || undefined })
+                });
+                const data = await res.json();
+                if (res.ok) setEmailResult(data);
+                setEmailSending(false);
+              }}
+              className="w-full bg-brand-red text-white font-bold py-3 rounded-xl hover:bg-brand-dark disabled:opacity-50 transition-colors"
+            >
+              {emailSending ? "Sending…" : "✉️ Send menu update to all customers"}
             </button>
           </div>
         </div>

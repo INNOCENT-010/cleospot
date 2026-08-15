@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { paystackVerifyTransaction } from "@/lib/paystack";
 import webpush from "@/lib/webpush";
+import { resend, FROM } from "@/lib/resend";
+import { orderConfirmationHtml } from "@/lib/emails/orderConfirmation";
 
 async function sendPushToSubscribers(title: string, body: string, url: string) {
   const { data: subs } = await supabaseAdmin.from("push_subscriptions").select("*");
@@ -33,7 +35,7 @@ export async function GET(req: Request) {
       // Fetch order first to check notif_confirmed guard
       const { data: order } = await supabaseAdmin
         .from("orders")
-        .select("id, status, notif_confirmed, customer_name")
+        .select("id, status, notif_confirmed, customer_name, customer_email, customer_address, customer_id, delivery_pin, delivery_fee, total")
         .eq("paystack_reference", reference)
         .single();
 
@@ -57,6 +59,30 @@ export async function GET(req: Request) {
             `Thanks ${order.customer_name?.split(" ")[0] || ""}! Your order is confirmed and being prepared.`,
             `/order/${order.id}`
           );
+
+          // Send confirmation email
+          if (order.customer_email) {
+            const { data: itemsData } = await supabaseAdmin
+              .from("order_items")
+              .select("meal_name, quantity, unit_price")
+              .eq("order_id", order.id);
+
+            await resend.emails.send({
+              from: FROM,
+              to: order.customer_email,
+              subject: `Order confirmed — ₦${Number(order.total).toLocaleString()} · CLeo's Pot`,
+              html: orderConfirmationHtml({
+                customerName: order.customer_name,
+                orderId: order.id,
+                items: itemsData || [],
+                total: Number(order.total),
+                deliveryFee: Number(order.delivery_fee),
+                address: order.customer_address,
+                pin: order.delivery_pin,
+                hasAccount: !!order.customer_id,
+              })
+            });
+          }
         }
       }
     }

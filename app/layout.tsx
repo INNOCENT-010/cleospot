@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import PushPrompt from "@/components/PushPrompt";
+import StickyCart from "@/components/StickyCart";
 import { CartProvider } from "@/components/CartProvider";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Footer settings={settings} />
           <WhatsAppButton number={settings?.whatsapp_number} />
           <PushPrompt />
+          <StickyCart />
         </CartProvider>
       </body>
     </html>
