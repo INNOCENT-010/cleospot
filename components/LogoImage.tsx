@@ -15,7 +15,7 @@ export default function LogoImage({ src, alt, size = "header" }: { src: string; 
     <img
       src={src}
       alt={alt}
-      className="h-14 w-auto object-contain"
+      className="h-16 w-auto object-contain"
     />
   );
 }

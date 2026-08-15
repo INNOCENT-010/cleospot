@@ -25,7 +25,7 @@ export default function Header({ settings }: { settings: StoreSettings | null })
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           {settings?.logo_url ? (
-            <div style={{ filter: scrolled ? "none" : "brightness(0) invert(1)" }}
+            <div style={{ mixBlendMode: scrolled ? "normal" : "multiply" }}
               className="transition-all duration-300">
               <LogoImage
                 src={settings.logo_url}
