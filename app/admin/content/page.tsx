@@ -14,6 +14,8 @@ export default function AdminContentPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [tab, setTab] = useState<"videos" | "announcements">("videos");
   const [vForm, setVForm] = useState({ url: "", sort_order: 0 });
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [aForm, setAForm] = useState({
     title: "", subtitle: "", emoji: "🎉",
     bg_color: "#1a0a00", text_color: "#ffffff", insert_after: 4
@@ -32,6 +34,28 @@ export default function AdminContentPage() {
 
   useEffect(() => { loadVideos(); loadAnnouncements(); }, []);
 
+  async function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress("Uploading…");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/admin/content/videos/upload", {
+      method: "POST",
+      credentials: "include",
+      body: fd
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setVForm((prev) => ({ ...prev, url: data.url }));
+      setUploadProgress("✓ Uploaded");
+    } else {
+      setUploadProgress(`Error: ${data.error}`);
+    }
+    setUploading(false);
+  }
+
   async function saveVideo() {
     if (!vForm.url) return;
     setSaving(true);
@@ -42,6 +66,7 @@ export default function AdminContentPage() {
       body: JSON.stringify(vForm)
     });
     setVForm({ url: "", sort_order: 0 });
+    setUploadProgress(null);
     loadVideos();
     setSaving(false);
   }
@@ -109,24 +134,64 @@ export default function AdminContentPage() {
       {tab === "videos" && (
         <div className="space-y-6">
           <div className="border rounded-xl p-4 space-y-3">
-            <p className="font-medium text-sm">Add video</p>
-            <input
-              placeholder="Video URL (mp4, .mov, Cloudinary, etc.)"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={vForm.url}
-              onChange={(e) => setVForm({ ...vForm, url: e.target.value })}
-            />
-            <div className="flex gap-2 items-center">
+            <p className="font-medium text-sm">Add hero video</p>
+
+            {/* Upload area */}
+            <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl px-4 py-8 cursor-pointer transition-colors ${
+              uploading ? "border-brand-red bg-red-50" : "border-gray-200 hover:border-brand-red hover:bg-red-50"
+            }`}>
               <input
-                type="number"
-                placeholder="Order"
-                className="w-24 border rounded-lg px-3 py-2 text-sm"
-                value={vForm.sort_order}
-                onChange={(e) => setVForm({ ...vForm, sort_order: Number(e.target.value) })}
+                type="file"
+                accept="video/mp4,video/mov,video/quicktime,video/webm"
+                className="hidden"
+                onChange={handleVideoUpload}
+                disabled={uploading}
               />
-              <button onClick={saveVideo} disabled={saving}
-                className="flex-1 bg-brand-red text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-                {saving ? "Adding…" : "Add video"}
+              {uploading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <svg className="w-6 h-6 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  <span className="text-sm text-brand-red font-medium">Uploading…</span>
+                </div>
+              ) : vForm.url ? (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-2xl">✅</span>
+                  <span className="text-sm text-green-600 font-medium">Video ready</span>
+                  <span className="text-xs text-gray-400 text-center truncate max-w-xs">{vForm.url}</span>
+                  <span className="text-xs text-brand-red underline cursor-pointer" onClick={(e) => { e.preventDefault(); setVForm({ ...vForm, url: "" }); setUploadProgress(null); }}>
+                    Replace
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-600">Tap to upload video</span>
+                  <span className="text-xs text-gray-400">MP4, MOV, WebM · max 50MB recommended</span>
+                </div>
+              )}
+            </label>
+
+            <div className="flex gap-2 items-center">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-xs text-gray-400">Play order</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  className="w-24 border rounded-lg px-3 py-2 text-sm"
+                  value={vForm.sort_order}
+                  onChange={(e) => setVForm({ ...vForm, sort_order: Number(e.target.value) })}
+                />
+              </div>
+              <button
+                onClick={saveVideo}
+                disabled={saving || !vForm.url || uploading}
+                className="flex-1 mt-4 bg-brand-red text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Saving…" : "Add to hero"}
               </button>
             </div>
           </div>
