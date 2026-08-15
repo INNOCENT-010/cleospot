@@ -17,32 +17,46 @@ export default function OrderTracker({ order: initialOrder, reference }: { order
   const [order, setOrder] = useState(initialOrder);
   const [verifying, setVerifying] = useState(false);
 
-  // On mount: if status is pending, always try to verify — covers refresh case too
+  // Single sequential init: fetch latest DB state, then verify if still pending
   useEffect(() => {
-    if (order.status !== "pending") return;
-    setVerifying(true);
-    fetch(`/api/paystack/verify?reference=${reference || order.paystack_reference}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.paid) {
-          setOrder((o) => ({ ...o, status: "paid" }));
-        }
-        setVerifying(false);
-      })
-      .catch(() => setVerifying(false));
-  }, []);
-
-  // Also re-fetch fresh order state on mount to catch any updates while user was away
-  useEffect(() => {
-    async function syncOrder() {
-      const { data } = await supabaseBrowser
+    async function init() {
+      // Step 1: get the freshest order from DB
+      const { data: fresh } = await supabaseBrowser
         .from("orders")
         .select("*")
         .eq("id", initialOrder.id)
         .single();
-      if (data) setOrder(data as Order);
+
+      if (!fresh) return;
+
+      // Step 2: if still pending, try to verify payment
+      if (fresh.status === "pending") {
+        setVerifying(true);
+        try {
+          const ref = reference || fresh.paystack_reference;
+          const res = await fetch(`/api/paystack/verify?reference=${ref}`);
+          const data = await res.json();
+          if (data.paid) {
+            // Re-fetch after verify to get DB-confirmed state
+            const { data: confirmed } = await supabaseBrowser
+              .from("orders")
+              .select("*")
+              .eq("id", initialOrder.id)
+              .single();
+            setOrder((confirmed as Order) || { ...fresh, status: "paid" });
+          } else {
+            setOrder(fresh as Order);
+          }
+        } catch {
+          setOrder(fresh as Order);
+        }
+        setVerifying(false);
+      } else {
+        // Already past pending — just use DB state
+        setOrder(fresh as Order);
+      }
     }
-    syncOrder();
+    init();
   }, [initialOrder.id]);
 
   // Live status updates via Supabase Realtime + polling fallback
